@@ -6,7 +6,7 @@ import Choices from '../components/Choices';
 import { startAdventure, continueAdventure, XP_PER_LEVEL } from '../api/narrator';
 import LevelUpModal from '../components/LevelUpModal';
 
-export default function GamePlay({ theme, player: initialPlayer, onRestart }) {
+export default function GamePlay({ theme, player: initialPlayer, kidMode = false, onRestart }) {
   const [player, setPlayer] = useState(initialPlayer);
   const [storyEntries, setStoryEntries] = useState([]);
   const [choices, setChoices] = useState([]);
@@ -29,7 +29,7 @@ export default function GamePlay({ theme, player: initialPlayer, onRestart }) {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await startAdventure(theme, player);
+      const result = await startAdventure(theme, player, kidMode);
       applyResult(result, null);
     } catch (e) {
       setError(e.message);
@@ -47,7 +47,13 @@ export default function GamePlay({ theme, player: initialPlayer, onRestart }) {
 
     newEntries.push({ type: 'narrative', text: result.narrative });
 
-    if (result.hpChange !== 0) {
+    // Kid mode: intercept gameOver and any fatal HP drops
+    const wouldDie = result.gameOver || (player.hp + result.hpChange) <= 0;
+    const isKidKnockout = kidMode && wouldDie;
+
+    if (isKidKnockout) {
+      newEntries.push({ type: 'knockout' });
+    } else if (result.hpChange !== 0) {
       newEntries.push({ type: 'damage', value: result.hpChange });
     }
 
@@ -62,7 +68,13 @@ export default function GamePlay({ theme, player: initialPlayer, onRestart }) {
     setStoryEntries(prev => [...prev, ...newEntries]);
 
     setPlayer(prev => {
-      const newHp = Math.min(prev.maxHp, Math.max(0, prev.hp + result.hpChange));
+      let newHp;
+      if (isKidKnockout) {
+        // Restore to half max HP on knockout instead of dying
+        newHp = Math.max(1, Math.floor(prev.maxHp / 2));
+      } else {
+        newHp = Math.min(prev.maxHp, Math.max(0, prev.hp + result.hpChange));
+      }
       const newInventory = result.itemFound ? [...prev.inventory, result.itemFound] : prev.inventory;
 
       const rawXp = (prev.xp || 0) + (result.xpGained || 0);
@@ -81,7 +93,7 @@ export default function GamePlay({ theme, player: initialPlayer, onRestart }) {
       { role: 'assistant', content: result.rawAssistantMessage },
     ];
 
-    if (result.gameOver) {
+    if (result.gameOver && !kidMode) {
       setGameOver(true);
       return;
     }
@@ -134,7 +146,7 @@ export default function GamePlay({ theme, player: initialPlayer, onRestart }) {
         ...player,
         hp: player.hp,
       };
-      const result = await continueAdventure(theme, updatedPlayer, historyRef.current, actionText, rollResult);
+      const result = await continueAdventure(theme, updatedPlayer, historyRef.current, actionText, rollResult, kidMode);
       applyResult(result, null);
     } catch (e) {
       setError(e.message);
@@ -163,7 +175,7 @@ export default function GamePlay({ theme, player: initialPlayer, onRestart }) {
     setError(null);
     setChoices([]);
     try {
-      const result = await continueAdventure(theme, player, historyRef.current, action, rollResult);
+      const result = await continueAdventure(theme, player, historyRef.current, action, rollResult, kidMode);
       applyResult(result, action);
     } catch (e) {
       setError(e.message);
@@ -246,7 +258,7 @@ export default function GamePlay({ theme, player: initialPlayer, onRestart }) {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Left: HUD */}
           <div className="lg:col-span-1">
-            <HUD player={player} theme={theme} />
+            <HUD player={player} theme={theme} kidMode={kidMode} />
           </div>
 
           {/* Right: Story + Controls */}

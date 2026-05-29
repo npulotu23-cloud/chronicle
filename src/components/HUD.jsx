@@ -1,7 +1,7 @@
 const THEME_ICONS = { fantasy: '⚔️', scifi: '🚀', biblical: '✡️', polynesian: '🌊' };
 const XP_PER_LEVEL = 50;
 
-export default function HUD({ player, theme }) {
+export default function HUD({ player, theme, kidMode = false }) {
   const { name, className, hp, maxHp, stats, inventory, xp = 0, level = 1 } = player;
   const hpPct = Math.max(0, (hp / maxHp) * 100);
   const xpPct = Math.min(100, (xp / XP_PER_LEVEL) * 100);
@@ -75,6 +75,14 @@ export default function HUD({ player, theme }) {
           </div>
         ))}
       </div>
+
+      {/* Kid Mode badge */}
+      {kidMode && (
+        <div className="flex items-center gap-1.5 bg-purple-950/60 border border-purple-700 rounded-lg px-2.5 py-1.5">
+          <span className="text-sm">⭐</span>
+          <span className="text-purple-300 text-xs font-bold tracking-wide">Kid Mode</span>
+        </div>
+      )}
 
       {/* Inventory */}
       {inventory.length > 0 && (

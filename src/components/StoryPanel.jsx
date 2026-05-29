@@ -49,6 +49,11 @@ export default function StoryPanel({ entries, isLoading }) {
               ✦ +{entry.value} XP
             </p>
           )}
+          {entry.type === 'knockout' && (
+            <div className="bg-purple-950/50 border border-purple-700 rounded-lg px-3 py-2 text-xs text-purple-300 font-medium">
+              ⭐ Knocked out — but woke up safe with HP restored! The adventure continues!
+            </div>
+          )}
         </div>
       ))}
 

@@ -22,10 +22,12 @@ function buildPlayer(name, classData) {
 export default function App() {
   const [screen, setScreen] = useState('theme');
   const [theme, setTheme] = useState(null);
+  const [kidMode, setKidMode] = useState(false);
   const [player, setPlayer] = useState(null);
 
-  function handleThemeSelect(selectedTheme) {
-    setTheme(selectedTheme);
+  function handleThemeSelect({ themeId, kidMode: km }) {
+    setTheme(themeId);
+    setKidMode(km);
     setScreen('class');
   }
 
@@ -37,6 +39,7 @@ export default function App() {
 
   function handleRestart() {
     setTheme(null);
+    setKidMode(false);
     setPlayer(null);
     setScreen('theme');
   }
@@ -46,7 +49,7 @@ export default function App() {
       {screen === 'theme' && <ThemeSelect onSelect={handleThemeSelect} />}
       {screen === 'class' && <ClassSelect theme={theme} onSelect={handleClassSelect} />}
       {screen === 'game' && player && (
-        <GamePlay theme={theme} player={player} onRestart={handleRestart} />
+        <GamePlay theme={theme} player={player} kidMode={kidMode} onRestart={handleRestart} />
       )}
     </div>
   );
