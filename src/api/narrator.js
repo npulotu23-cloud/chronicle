@@ -7,28 +7,39 @@ const THEME_PROMPTS = {
   polynesian: `You are the Voyager-Guide of a mythic Polynesian world of vast oceans, volcanic islands, ancestral spirits, and ancient rivalries. The sea is alive and dangerous. Demigods walk the earth. Honor and lineage define every encounter. The spirit world bleeds into the living.`,
 };
 
+export const XP_PER_LEVEL = 50;
+
 function buildSystemPrompt(theme, playerState) {
   const base = THEME_PROMPTS[theme];
+  const level = playerState.level || 1;
+  const difficultyNote = level > 1
+    ? `The player is level ${level} — scale encounter difficulty accordingly. Raise rollDifficulty values by ${level - 1} above your baseline (e.g. a "medium" fight is now DC ${13 + (level - 1)} not 12). Make enemies tougher, stakes higher, and consequences more severe.`
+    : `The player is level 1 — use baseline difficulty values.`;
+
   return `${base}
 
 Current player state:
 - Name: ${playerState.name}
 - Class: ${playerState.className}
+- Level: ${level}
 - HP: ${playerState.hp}/${playerState.maxHp}
 - Stats: STR ${playerState.stats.str}, AGI ${playerState.stats.agi}, INT ${playerState.stats.int}, FTH ${playerState.stats.fth}
 - Inventory: ${playerState.inventory.length > 0 ? playerState.inventory.join(', ') : 'Nothing'}
 
+${difficultyNote}
+
 RULES:
 - Narrate in 4-5 sentences. Be vivid, brutal, and atmospheric. Do NOT hand-hold or soften consequences.
 - After every narration, output EXACTLY one JSON block on its own line with this structure:
-{"choices":["choice 1","choice 2","choice 3"],"requiresRoll":false,"rollStat":"str","rollDifficulty":12,"rollReason":"why they roll","hpChange":0,"itemFound":null,"gameOver":false,"victory":false}
+{"choices":["choice 1","choice 2","choice 3"],"requiresRoll":false,"rollStat":"str","rollDifficulty":12,"rollReason":"why they roll","hpChange":0,"itemFound":null,"gameOver":false,"victory":false,"xpGained":10}
 - requiresRoll: true for risky actions (combat, stealth, persuasion, miracles, dangerous movement)
 - rollStat: "str", "agi", "int", or "fth"
-- rollDifficulty: 8=easy, 12=medium, 16=hard, 19=legendary
+- rollDifficulty: 8=easy, 12=medium, 16=hard, 19=legendary (scaled up by level as noted above)
 - hpChange: negative for damage, positive for healing. Apply to current HP of ${playerState.hp}.
 - gameOver: true ONLY when HP would drop to 0 or below
 - victory: true ONLY when the main quest is complete
 - itemFound: string name of item if player finds something, null otherwise
+- xpGained: integer 10-20. Award 10 for trivial moments, 15 for a standard encounter resolved, 20 for a hard-won fight or major story beat. Never award 0.
 - Always provide exactly 3 choices. Make them meaningfully different.`;
 }
 
@@ -111,6 +122,7 @@ async function callClaude(systemPrompt, history, userMessage) {
     itemFound: parsed.itemFound || null,
     gameOver: parsed.gameOver || false,
     victory: parsed.victory || false,
+    xpGained: typeof parsed.xpGained === 'number' ? Math.min(20, Math.max(10, parsed.xpGained)) : 10,
     rawAssistantMessage: text,
   };
 }

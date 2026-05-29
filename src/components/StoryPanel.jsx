@@ -44,6 +44,11 @@ export default function StoryPanel({ entries, isLoading }) {
               {entry.value > 0 ? `♥ +${entry.value} HP restored` : `💔 ${Math.abs(entry.value)} damage taken`}
             </p>
           )}
+          {entry.type === 'xp' && (
+            <p className="text-amber-600 text-xs font-medium">
+              ✦ +{entry.value} XP
+            </p>
+          )}
         </div>
       ))}
 

@@ -1,8 +1,10 @@
 const THEME_ICONS = { fantasy: '⚔️', scifi: '🚀', biblical: '✡️', polynesian: '🌊' };
+const XP_PER_LEVEL = 50;
 
 export default function HUD({ player, theme }) {
-  const { name, className, hp, maxHp, stats, inventory } = player;
+  const { name, className, hp, maxHp, stats, inventory, xp = 0, level = 1 } = player;
   const hpPct = Math.max(0, (hp / maxHp) * 100);
+  const xpPct = Math.min(100, (xp / XP_PER_LEVEL) * 100);
 
   const hpColor =
     hpPct > 60 ? 'bg-green-500' :
@@ -22,8 +24,13 @@ export default function HUD({ player, theme }) {
       {/* Name & class */}
       <div className="flex items-center gap-2">
         <span className="text-xl">{THEME_ICONS[theme]}</span>
-        <div>
-          <p className="text-stone-100 font-bold text-sm leading-tight">{name}</p>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="text-stone-100 font-bold text-sm leading-tight truncate">{name}</p>
+            <span className="shrink-0 bg-amber-900/60 border border-amber-700 text-amber-400 text-xs font-bold px-1.5 py-0.5 rounded-md">
+              Lv.{level}
+            </span>
+          </div>
           <p className="text-stone-500 text-xs">{className}</p>
         </div>
       </div>
@@ -43,6 +50,20 @@ export default function HUD({ player, theme }) {
         {hpPct <= 30 && (
           <p className="text-red-500 text-xs mt-1 text-center animate-pulse">⚠ Critically wounded</p>
         )}
+      </div>
+
+      {/* XP bar */}
+      <div>
+        <div className="flex justify-between items-center mb-1">
+          <span className="text-xs text-stone-500 uppercase tracking-wide">XP</span>
+          <span className="text-xs text-stone-500">{xp} / {XP_PER_LEVEL}</span>
+        </div>
+        <div className="h-1.5 bg-stone-800 rounded-full overflow-hidden">
+          <div
+            className="h-full rounded-full bg-amber-600 transition-all duration-700"
+            style={{ width: `${xpPct}%` }}
+          />
+        </div>
       </div>
 
       {/* Stats */}

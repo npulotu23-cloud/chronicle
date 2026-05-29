@@ -14,6 +14,8 @@ function buildPlayer(name, classData) {
     maxHp: classData.hp,
     stats: { ...BASE_STATS, ...classData.stats },
     inventory: [],
+    xp: 0,
+    level: 1,
   };
 }
 
