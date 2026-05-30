@@ -21,7 +21,7 @@ export default function Choices({ choices, choiceStats = [], onChoose, disabled 
 
   const handleCustom = () => {
     if (!custom.trim() || disabled) return;
-    onChoose(custom.trim());
+    onChoose(custom.trim(), -1);   // -1 signals a free-typed action
     setCustom('');
   };
 
@@ -35,7 +35,7 @@ export default function Choices({ choices, choiceStats = [], onChoose, disabled 
           return (
             <button
               key={i}
-              onClick={() => !disabled && onChoose(choice)}
+              onClick={() => !disabled && onChoose(choice, i)}
               disabled={disabled}
               className={`
                 w-full text-left px-4 py-3 rounded-xl border text-sm transition-all duration-200

@@ -3,7 +3,7 @@ import RollHistory from './RollHistory';
 const THEME_ICONS = { fantasy: '⚔️', scifi: '🚀', biblical: '✡️', polynesian: '🌊' };
 const XP_PER_LEVEL = 50;
 
-export default function HUD({ player, theme, kidMode = false, rollHistory = [] }) {
+export default function HUD({ player, theme, kidMode = false, rollHistory = [], lastXpGained = 0 }) {
   const { name, className, hp, maxHp, stats, inventory, xp = 0, level = 1 } = player;
   const hpPct = Math.max(0, (hp / maxHp) * 100);
   const xpPct = Math.min(100, (xp / XP_PER_LEVEL) * 100);
@@ -43,7 +43,7 @@ export default function HUD({ player, theme, kidMode = false, rollHistory = [] }
       </div>
 
       {/* XP bar */}
-      <div>
+      <div className="relative">
         <div className="flex justify-between items-center mb-1">
           <span className="text-xs text-stone-500 uppercase tracking-wide">XP</span>
           <span className="text-xs text-stone-500">{xp} / {XP_PER_LEVEL}</span>
@@ -51,6 +51,14 @@ export default function HUD({ player, theme, kidMode = false, rollHistory = [] }
         <div className="h-1.5 bg-stone-800 rounded-full overflow-hidden">
           <div className="h-full rounded-full bg-amber-600 transition-all duration-700" style={{ width: `${xpPct}%` }} />
         </div>
+        {lastXpGained > 0 && (
+          <span
+            key={lastXpGained + '-' + Date.now()}
+            className="xp-flash absolute -top-5 right-0 text-amber-400 text-xs font-bold pointer-events-none"
+          >
+            +{lastXpGained} XP
+          </span>
+        )}
       </div>
 
       {/* Stats */}

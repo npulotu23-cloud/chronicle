@@ -57,6 +57,16 @@ export default function StoryPanel({ entries, isLoading }) {
               </span>
             </div>
           )}
+          {entry.type === 'crit_effect' && (
+            <div className={`border rounded-lg px-3 py-2 text-xs font-medium ${
+              entry.positive
+                ? 'bg-amber-950/40 border-amber-700 text-amber-300'
+                : 'bg-red-950/40 border-red-800 text-red-300'
+            }`}>
+              {entry.positive ? '✦ Permanent gain: ' : '✕ Permanent consequence: '}
+              {entry.text}
+            </div>
+          )}
           {entry.type === 'chapter_header' && (
             <div className="text-center py-3 border-y border-stone-800 my-2">
               <p className="text-stone-600 text-xs uppercase tracking-widest mb-1">Chapter {entry.chapter}</p>

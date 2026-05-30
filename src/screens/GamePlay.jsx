@@ -20,33 +20,37 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
   const [rollConfig, setRollConfig]     = useState(sg ? (sg.rollConfig || { stat: 'str', difficulty: 12, reason: '' }) : { stat: 'str', difficulty: 12, reason: '' });
 
   // ── Chapter state ────────────────────────────────────────────────────────
-  const [chapter, setChapter]               = useState(sg ? (sg.chapter || 1) : 1);
-  const [encounterCount, setEncounterCount] = useState(sg ? (sg.encounterCount || 0) : 0);
+  const [chapter, setChapter]                     = useState(sg ? (sg.chapter || 1) : 1);
+  const [encounterCount, setEncounterCount]       = useState(sg ? (sg.encounterCount || 0) : 0);
   const [chapterTransition, setChapterTransition] = useState(null);
 
   // ── Roll / death tracking ────────────────────────────────────────────────
-  const [rollHistory, setRollHistory]   = useState(sg ? (sg.rollHistory || []) : []);
-  const [turnCount, setTurnCount]       = useState(sg ? (sg.turnCount || 0) : 0);
-  const [totalXpEarned, setTotalXpEarned] = useState(sg ? (sg.totalXpEarned || 0) : 0);
-  const [causeOfDeath, setCauseOfDeath] = useState('');
+  const [rollHistory, setRollHistory]       = useState(sg ? (sg.rollHistory || []) : []);
+  const [turnCount, setTurnCount]           = useState(sg ? (sg.turnCount || 0) : 0);
+  const [totalXpEarned, setTotalXpEarned]   = useState(sg ? (sg.totalXpEarned || 0) : 0);
+  const [causeOfDeath, setCauseOfDeath]     = useState('');
 
   // ── UI state ─────────────────────────────────────────────────────────────
-  const [isLoading, setIsLoading]         = useState(false);
-  const [pendingAction, setPendingAction] = useState(null);
-  const [rollDone, setRollDone]           = useState(false);
-  const [gameOver, setGameOver]           = useState(false);
-  const [victory, setVictory]             = useState(false);
-  const [error, setError]                 = useState(null);
-  const [levelUpPending, setLevelUpPending] = useState(false);
+  const [isLoading, setIsLoading]               = useState(false);
+  const [pendingAction, setPendingAction]       = useState(null);
+  const [pendingActionIsCustom, setPendingActionIsCustom] = useState(false);
+  const [rollDone, setRollDone]                 = useState(false);
+  const [gameOver, setGameOver]                 = useState(false);
+  const [victory, setVictory]                   = useState(false);
+  const [error, setError]                       = useState(null);
+  const [levelUpPending, setLevelUpPending]     = useState(false);
+  const [xpFlash, setXpFlash]                   = useState(0);
 
-  const historyRef = useRef(sg ? sg.history : []);
+  const historyRef      = useRef(sg ? sg.history : []);
+  const xpFlashTimerRef = useRef(null);
 
   // ── Start or restore ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!sg) initAdventure();
+    return () => clearTimeout(xpFlashTimerRef.current); // cleanup on unmount
   }, []);
 
-  // ── Auto-save after every meaningful state change ────────────────────────
+  // ── Auto-save ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (storyEntries.length === 0) return;
     if (gameOver || victory) return;
@@ -83,24 +87,32 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
 
   // ────────────────────────────────────────────────────────────────────────
   // applyResult — called after EVERY Claude response.
-  // ctx = { ch, ec, pl } lets us use fresh values before React batches the setState.
+  //   ctx      = { ch, ec, pl } for fresh values when React hasn't batched yet
+  //   rollMeta = { critSuccess, critFail } from the dice roll that preceded this call
   // ────────────────────────────────────────────────────────────────────────
-  function applyResult(result, actionText, ctx = null) {
-    const currentChapter      = ctx ? ctx.ch : chapter;
+  function applyResult(result, actionText, ctx = null, rollMeta = null) {
+    const currentChapter       = ctx ? ctx.ch : chapter;
     const currentEncounterCount = ctx ? ctx.ec : encounterCount;
-    const currentPlayer       = ctx ? ctx.pl : player;
+    const currentPlayer        = ctx ? ctx.pl : player;
 
     const newEntries = [];
 
     if (actionText) newEntries.push({ type: 'action', text: actionText });
-
-    // Boss indicator
     if (result.bossEncounter) newEntries.push({ type: 'boss' });
 
     newEntries.push({ type: 'narrative', text: result.narrative });
 
-    // Kid-mode knockout intercept
-    const wouldDie = result.gameOver || (currentPlayer.hp + result.hpChange) <= 0;
+    // ── Critical permanent effect ──
+    if (result.criticalEffect) {
+      newEntries.push({
+        type: 'crit_effect',
+        text: result.criticalEffect,
+        positive: rollMeta?.critSuccess === true,
+      });
+    }
+
+    // ── Kid-mode knockout intercept ──
+    const wouldDie     = result.gameOver || (currentPlayer.hp + result.hpChange) <= 0;
     const isKidKnockout = kidMode && wouldDie;
 
     if (isKidKnockout) {
@@ -110,11 +122,19 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
     }
 
     if (result.itemFound) newEntries.push({ type: 'item', text: result.itemFound });
-    if (result.xpGained > 0) newEntries.push({ type: 'xp', value: result.xpGained });
+
+    // ── XP (only when earned) ──
+    if (result.xpGained > 0) {
+      newEntries.push({ type: 'xp', value: result.xpGained });
+      // Trigger animated flash near XP bar
+      setXpFlash(result.xpGained);
+      clearTimeout(xpFlashTimerRef.current);
+      xpFlashTimerRef.current = setTimeout(() => setXpFlash(0), 2500);
+    }
 
     setStoryEntries(prev => [...prev, ...newEntries]);
 
-    // Update player HP, inventory, XP, level
+    // ── Update player ──
     setPlayer(prev => {
       let newHp;
       if (isKidKnockout) {
@@ -123,29 +143,24 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
         newHp = Math.min(prev.maxHp, Math.max(0, prev.hp + result.hpChange));
       }
       const newInventory = result.itemFound ? [...prev.inventory, result.itemFound] : prev.inventory;
-      const rawXp = (prev.xp || 0) + (result.xpGained || 0);
+      const rawXp  = (prev.xp || 0) + (result.xpGained || 0);
       const newLevel = (prev.level || 1) + Math.floor(rawXp / XP_PER_LEVEL);
-      const newXp = rawXp % XP_PER_LEVEL;
+      const newXp  = rawXp % XP_PER_LEVEL;
       if (newLevel > (prev.level || 1)) setLevelUpPending(true);
       return { ...prev, hp: newHp, inventory: newInventory, xp: newXp, level: newLevel };
     });
 
-    // Track total XP and turn count
     setTotalXpEarned(prev => prev + (result.xpGained || 0));
     if (actionText) setTurnCount(prev => prev + 1);
+    setEncounterCount(currentEncounterCount + 1);
 
-    // Increment encounter counter
-    const newEncounterCount = currentEncounterCount + 1;
-    setEncounterCount(newEncounterCount);
-
-    // Update conversation history
     historyRef.current = [
       ...historyRef.current,
       { role: 'user', content: actionText || 'Begin the adventure.' },
       { role: 'assistant', content: result.rawAssistantMessage },
     ];
 
-    // ── Game over ──
+    // ── Terminal states ──
     if (result.gameOver && !kidMode) {
       setCauseOfDeath(result.narrative);
       clearGame();
@@ -153,7 +168,6 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
       return;
     }
 
-    // ── Victory ──
     if (result.victory) {
       clearGame();
       setVictory(true);
@@ -167,12 +181,17 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
         title: result.chapterTitle || '',
         description: result.chapterDescription || '',
       });
-      // Fall through to set choices (available after player dismisses transition)
     }
 
-    // Set choices for next action
+    // ── Set next choices ──
     setChoices(result.choices || []);
-    setChoiceStats(result.choiceStats || [null, null, null]);
+
+    // FEATURE 2: enforce no stat tags on non-roll turns
+    const sanitizedChoiceStats = result.requiresRoll
+      ? (result.choiceStats || [null, null, null])
+      : [null, null, null];
+    setChoiceStats(sanitizedChoiceStats);
+
     setRequiresRoll(result.requiresRoll || false);
     setRollConfig({
       stat: result.rollStat || 'str',
@@ -180,6 +199,7 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
       reason: result.rollReason || '',
     });
     setPendingAction(null);
+    setPendingActionIsCustom(false);
     setRollDone(false);
   }
 
@@ -196,21 +216,40 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
   }
 
   // ────────────────────────────────────────────────────────────────────────
-  async function handleChoice(action) {
+  // handleChoice — called for both preset buttons (choiceIndex ≥ 0) and
+  // custom typed actions (choiceIndex = -1).
+  // ────────────────────────────────────────────────────────────────────────
+  async function handleChoice(action, choiceIndex = -1) {
     if (isLoading) return;
+    const isCustom = choiceIndex === -1;
+
     if (requiresRoll) {
+      // FEATURE 1: for preset choices, enforce choiceStats stat over rollStat
+      if (!isCustom && choiceIndex >= 0) {
+        const taggedStat = choiceStats[choiceIndex];
+        if (taggedStat && taggedStat !== rollConfig.stat) {
+          console.warn(
+            `[Chronicle] Stat mismatch on choice ${choiceIndex}: ` +
+            `choiceStats="${taggedStat}" overrides rollStat="${rollConfig.stat}". Using choiceStats value.`
+          );
+          setRollConfig(prev => ({ ...prev, stat: taggedStat }));
+        }
+      }
+
       setPendingAction(action);
+      setPendingActionIsCustom(isCustom);
       setStoryEntries(prev => [...prev, { type: 'action', text: action }]);
       return;
     }
+
     await sendAction(action, null);
   }
 
+  // ────────────────────────────────────────────────────────────────────────
   async function handleRoll(rollResult) {
     setRollDone(true);
     const actionText = pendingAction;
 
-    // Record roll in history
     const rollEntry = {
       label: rollConfig.reason,
       roll: rollResult.roll,
@@ -236,8 +275,14 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
     setError(null);
     try {
       const playerWithCtx = { ...player, chapter, encounterCount };
-      const result = await continueAdventure(theme, playerWithCtx, historyRef.current, actionText, rollResult, kidMode);
-      applyResult(result, null);
+      const result = await continueAdventure(
+        theme, playerWithCtx, historyRef.current, actionText, rollResult, kidMode
+      );
+      // Pass rollMeta so applyResult can style criticalEffect correctly
+      applyResult(result, null, null, {
+        critSuccess: rollResult.critSuccess,
+        critFail: rollResult.critFail,
+      });
     } catch (e) {
       setError(e.message);
     } finally {
@@ -247,6 +292,7 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
     }
   }
 
+  // ────────────────────────────────────────────────────────────────────────
   function handleLevelUp(pointsMap) {
     setPlayer(prev => ({
       ...prev,
@@ -260,13 +306,16 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
     setLevelUpPending(false);
   }
 
+  // ────────────────────────────────────────────────────────────────────────
   async function sendAction(action, rollResult) {
     setIsLoading(true);
     setError(null);
     setChoices([]);
     try {
       const playerWithCtx = { ...player, chapter, encounterCount };
-      const result = await continueAdventure(theme, playerWithCtx, historyRef.current, action, rollResult, kidMode);
+      const result = await continueAdventure(
+        theme, playerWithCtx, historyRef.current, action, rollResult, kidMode
+      );
       applyResult(result, action);
     } catch (e) {
       setError(e.message);
@@ -360,7 +409,13 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Left: HUD */}
           <div className="lg:col-span-1">
-            <HUD player={player} theme={theme} kidMode={kidMode} rollHistory={rollHistory} />
+            <HUD
+              player={player}
+              theme={theme}
+              kidMode={kidMode}
+              rollHistory={rollHistory}
+              lastXpGained={xpFlash}
+            />
           </div>
 
           {/* Right: Story + Controls */}
@@ -376,6 +431,15 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
                 >
                   Retry
                 </button>
+              </div>
+            )}
+
+            {/* FEATURE 4: stat explanation for custom free actions on a roll turn */}
+            {requiresRoll && pendingAction && !rollDone && pendingActionIsCustom && rollConfig.reason && (
+              <div className="bg-stone-900/60 border border-stone-700 rounded-xl px-4 py-2.5 text-sm text-stone-400 italic">
+                This calls for a{' '}
+                <span className="font-bold not-italic uppercase text-amber-400">{rollConfig.stat}</span>
+                {' '}roll —{' '}{rollConfig.reason}
               </div>
             )}
 
