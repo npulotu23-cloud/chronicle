@@ -1,23 +1,16 @@
+import RollHistory from './RollHistory';
+
 const THEME_ICONS = { fantasy: '⚔️', scifi: '🚀', biblical: '✡️', polynesian: '🌊' };
 const XP_PER_LEVEL = 50;
 
-export default function HUD({ player, theme, kidMode = false }) {
+export default function HUD({ player, theme, kidMode = false, rollHistory = [] }) {
   const { name, className, hp, maxHp, stats, inventory, xp = 0, level = 1 } = player;
   const hpPct = Math.max(0, (hp / maxHp) * 100);
   const xpPct = Math.min(100, (xp / XP_PER_LEVEL) * 100);
 
-  const hpColor =
-    hpPct > 60 ? 'bg-green-500' :
-    hpPct > 30 ? 'bg-amber-500' :
-    'bg-red-600';
-
-  const hpTextColor =
-    hpPct > 60 ? 'text-green-400' :
-    hpPct > 30 ? 'text-amber-400' :
-    'text-red-400';
-
-  const hpGlow =
-    hpPct <= 30 ? 'shadow-red-900/50' : '';
+  const hpColor     = hpPct > 60 ? 'bg-green-500'  : hpPct > 30 ? 'bg-amber-500'  : 'bg-red-600';
+  const hpTextColor = hpPct > 60 ? 'text-green-400' : hpPct > 30 ? 'text-amber-400' : 'text-red-400';
+  const hpGlow      = hpPct <= 30 ? 'shadow-red-900/50' : '';
 
   return (
     <div className="bg-stone-950 border border-stone-800 rounded-xl p-4 space-y-3">
@@ -42,10 +35,7 @@ export default function HUD({ player, theme, kidMode = false }) {
           <span className={`text-xs font-bold ${hpTextColor}`}>{hp} / {maxHp}</span>
         </div>
         <div className={`h-2 bg-stone-800 rounded-full overflow-hidden shadow-inner ${hpPct <= 30 ? `shadow-lg ${hpGlow}` : ''}`}>
-          <div
-            className={`h-full rounded-full transition-all duration-500 ${hpColor}`}
-            style={{ width: `${hpPct}%` }}
-          />
+          <div className={`h-full rounded-full transition-all duration-500 ${hpColor}`} style={{ width: `${hpPct}%` }} />
         </div>
         {hpPct <= 30 && (
           <p className="text-red-500 text-xs mt-1 text-center animate-pulse">⚠ Critically wounded</p>
@@ -59,10 +49,7 @@ export default function HUD({ player, theme, kidMode = false }) {
           <span className="text-xs text-stone-500">{xp} / {XP_PER_LEVEL}</span>
         </div>
         <div className="h-1.5 bg-stone-800 rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full bg-amber-600 transition-all duration-700"
-            style={{ width: `${xpPct}%` }}
-          />
+          <div className="h-full rounded-full bg-amber-600 transition-all duration-700" style={{ width: `${xpPct}%` }} />
         </div>
       </div>
 
@@ -83,6 +70,9 @@ export default function HUD({ player, theme, kidMode = false }) {
           <span className="text-purple-300 text-xs font-bold tracking-wide">Kid Mode</span>
         </div>
       )}
+
+      {/* Roll history (collapsible) */}
+      <RollHistory rollHistory={rollHistory} />
 
       {/* Inventory */}
       {inventory.length > 0 && (

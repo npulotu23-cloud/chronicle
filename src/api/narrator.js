@@ -19,10 +19,22 @@ export const XP_PER_LEVEL = 50;
 function buildSystemPrompt(theme, playerState, kidMode = false) {
   const base = kidMode ? KID_MODE_THEME_PROMPTS[theme] : THEME_PROMPTS[theme];
   const level = playerState.level || 1;
+  const chapter = playerState.chapter || 1;
+  const encounterCount = playerState.encounterCount || 0;
+  const currentEncounter = encounterCount + 1; // 1-based encounter number in this chapter
 
   const difficultyNote = level > 1
-    ? `The player is level ${level} — scale encounter difficulty accordingly. Raise rollDifficulty values by ${level - 1} above your baseline (e.g. a "medium" challenge is now DC ${13 + (level - 1)} not 12). Make challenges bigger and more exciting.`
+    ? `The player is level ${level} — scale encounter difficulty accordingly. Raise rollDifficulty values by ${level - 1} above your baseline. Make challenges bigger and harder.`
     : `The player is level 1 — use baseline difficulty values.`;
+
+  const chapterNote = `
+CHAPTER SYSTEM:
+- This is Chapter ${chapter} of 3. Encounter ${currentEncounter} within this chapter.
+- Each chapter spans 8-10 encounters. Build narrative tension toward the chapter boss.
+- Chapter boss encounter: happens around encounter 7-9. Set bossEncounter: true for the climactic fight. Boss encounters have rollDifficulty +2 above normal.
+- When the chapter's story arc resolves (encounter 8+): set chapterComplete: true. Provide a chapterTitle (short, evocative) and chapterDescription (one vivid sentence about what lies ahead in the next chapter).
+- Chapter 3 is the final chapter. Its boss is the last challenge of the entire adventure — set victory: true when the player defeats it. Do NOT set chapterComplete: true for Chapter 3.
+- Only Chapters 1 and 2 use chapterComplete. Chapter 3 ends only via victory.`;
 
   const toneRules = kidMode ? `
 TONE RULES (Kid Mode — age 7):
@@ -47,20 +59,26 @@ Current player state:
 - Inventory: ${playerState.inventory.length > 0 ? playerState.inventory.join(', ') : 'Nothing'}
 
 ${difficultyNote}
+${chapterNote}
 ${toneRules}
 
 RULES:
 - Narrate in 4-5 sentences.
-- After every narration, output EXACTLY one JSON block on its own line with this structure:
-{"choices":["choice 1","choice 2","choice 3"],"requiresRoll":false,"rollStat":"str","rollDifficulty":12,"rollReason":"why they roll","hpChange":0,"itemFound":null,"gameOver":false,"victory":false,"xpGained":10}
+- After every narration, output EXACTLY one JSON block with this structure:
+{"choices":["choice 1","choice 2","choice 3"],"requiresRoll":false,"rollStat":"str","rollDifficulty":12,"rollReason":"why they roll","hpChange":0,"itemFound":null,"gameOver":false,"victory":false,"xpGained":10,"chapterComplete":false,"bossEncounter":false,"chapterTitle":"","chapterDescription":"","choiceStats":[null,null,null]}
 - requiresRoll: true for risky actions (combat, stealth, persuasion, miracles, dangerous movement)
-- rollStat: "str", "agi", "int", or "fth"
-- rollDifficulty: 8=easy, 12=medium, 16=hard, 19=legendary (scaled up by level as noted above)
+- rollStat: "str", "agi", "int", or "fth" — the primary stat for the roll
+- rollDifficulty: 8=easy, 12=medium, 16=hard, 19=legendary (scaled up by level)
 - hpChange: negative for damage, positive for healing. Apply to current HP of ${playerState.hp}.
-- gameOver: ${kidMode ? 'ALWAYS false — NEVER set to true in Kid Mode. The adventure never ends.' : 'true ONLY when HP would drop to 0 or below'}
-- victory: true ONLY when the main quest is complete
-- itemFound: string name of item if player finds something, null otherwise
-- xpGained: integer 10-20. Award 10 for trivial moments, 15 for a standard encounter resolved, 20 for a hard-won fight or major story beat. Never award 0.
+- gameOver: ${kidMode ? 'ALWAYS false — NEVER set to true in Kid Mode.' : 'true ONLY when HP would drop to 0 or below'}
+- victory: true ONLY when the final Chapter 3 boss is defeated
+- itemFound: string name of item found, or null
+- xpGained: integer 10-20. 10=trivial, 15=standard encounter, 20=boss or major beat. Never 0.
+- chapterComplete: true only at the END of Chapter 1 or Chapter 2 (not Chapter 3)
+- bossEncounter: true for the chapter's climactic boss fight
+- chapterTitle: short title for the NEXT chapter (e.g. "The Betrayal" or "Into the Void") — only when chapterComplete is true
+- chapterDescription: one vivid sentence about what awaits in the next chapter — only when chapterComplete is true
+- choiceStats: array matching choices — each entry is the stat tag for that choice ("str","agi","int","fth") if it requires a roll, or null if it does not. Even when requiresRoll is false, individual risky choices can have a stat tag.
 - Always provide exactly 3 choices. Make them meaningfully different.`;
 }
 
@@ -144,6 +162,11 @@ async function callClaude(systemPrompt, history, userMessage) {
     gameOver: parsed.gameOver || false,
     victory: parsed.victory || false,
     xpGained: typeof parsed.xpGained === 'number' ? Math.min(20, Math.max(10, parsed.xpGained)) : 10,
+    chapterComplete: parsed.chapterComplete || false,
+    bossEncounter: parsed.bossEncounter || false,
+    chapterTitle: parsed.chapterTitle || '',
+    chapterDescription: parsed.chapterDescription || '',
+    choiceStats: Array.isArray(parsed.choiceStats) ? parsed.choiceStats : [null, null, null],
     rawAssistantMessage: text,
   };
 }

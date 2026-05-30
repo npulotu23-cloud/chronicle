@@ -24,20 +24,18 @@ export default function StoryPanel({ entries, isLoading }) {
           {entry.type === 'roll' && (
             <div className={`text-xs font-mono px-3 py-2 rounded-lg border ${
               entry.critSuccess ? 'bg-amber-950/50 border-amber-700 text-amber-300' :
-              entry.critFail ? 'bg-red-950/50 border-red-800 text-red-300' :
-              entry.success ? 'bg-green-950/50 border-green-800 text-green-300' :
-              'bg-stone-900 border-stone-700 text-stone-400'
+              entry.critFail    ? 'bg-red-950/50 border-red-800 text-red-300' :
+              entry.success     ? 'bg-green-950/50 border-green-800 text-green-300' :
+                                  'bg-stone-900 border-stone-700 text-stone-400'
             }`}>
               {entry.critSuccess && '✦ CRITICAL SUCCESS — '}
-              {entry.critFail && '✕ CRITICAL FAIL — '}
+              {entry.critFail    && '✕ CRITICAL FAIL — '}
               {!entry.critSuccess && !entry.critFail && (entry.success ? '✓ Success — ' : '✗ Failure — ')}
               {entry.text}
             </div>
           )}
           {entry.type === 'item' && (
-            <p className="text-emerald-400 text-xs font-medium">
-              ◆ Found: {entry.text}
-            </p>
+            <p className="text-emerald-400 text-xs font-medium">◆ Found: {entry.text}</p>
           )}
           {entry.type === 'damage' && (
             <p className={`text-xs font-medium ${entry.value > 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -45,13 +43,24 @@ export default function StoryPanel({ entries, isLoading }) {
             </p>
           )}
           {entry.type === 'xp' && (
-            <p className="text-amber-600 text-xs font-medium">
-              ✦ +{entry.value} XP
-            </p>
+            <p className="text-amber-600 text-xs font-medium">✦ +{entry.value} XP</p>
           )}
           {entry.type === 'knockout' && (
             <div className="bg-purple-950/50 border border-purple-700 rounded-lg px-3 py-2 text-xs text-purple-300 font-medium">
               ⭐ Knocked out — but woke up safe with HP restored! The adventure continues!
+            </div>
+          )}
+          {entry.type === 'boss' && (
+            <div className="text-center border border-red-900/70 bg-red-950/20 rounded-lg py-2 px-3">
+              <span className="text-red-500 text-xs font-bold tracking-widest uppercase">
+                ⚔ Boss Encounter ⚔
+              </span>
+            </div>
+          )}
+          {entry.type === 'chapter_header' && (
+            <div className="text-center py-3 border-y border-stone-800 my-2">
+              <p className="text-stone-600 text-xs uppercase tracking-widest mb-1">Chapter {entry.chapter}</p>
+              {entry.title && <p className="text-amber-500 text-sm font-bold" style={{ fontFamily: 'Georgia, serif' }}>{entry.title}</p>}
             </div>
           )}
         </div>
