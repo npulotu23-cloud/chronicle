@@ -1,59 +1,72 @@
-const THEME_DIVIDERS = {
-  fantasy: '⚔️ ✦ ⚔️',
-  scifi: '◈ ─── ◈',
-  biblical: '✦ ✡ ✦',
-  polynesian: '≈ 🌊 ≈',
+import { getTheme, glowText } from '../utils/theme';
+
+const DIVIDERS = {
+  fantasy: '⚔ ✦ ⚔',
+  scifi:   '◈ ─ ◈',
+  biblical:'✦ ✡ ✦',
+  polynesian: '≋ 🌊 ≋',
 };
 
-const CHAPTER_SUBTITLES = ['', 'The First Trial', 'The Darkening', 'The Final Hour'];
-
 export default function ChapterTransition({ chapter, title, description, theme, onContinue }) {
-  const divider = THEME_DIVIDERS[theme] || '✦';
-  const subtitle = CHAPTER_SUBTITLES[chapter] || '';
+  const tc = getTheme(theme);
+  const divider = DIVIDERS[theme] || '✦';
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12 fade-in">
-      {/* Atmospheric top line */}
-      <div className="h-px w-64 mb-12 bg-gradient-to-r from-transparent via-stone-600 to-transparent" />
+    <div className="relative min-h-screen flex flex-col items-center justify-center px-4 py-12">
+      {/* Background */}
+      <div className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat"
+           style={{ backgroundImage: `url(${tc.bgUrl})`, backgroundColor: '#050508' }} />
+      <div className="fixed inset-0 z-[1]" style={{ background: `${tc.overlayColor}` }} />
+      {/* Extra dark center vignette */}
+      <div className="fixed inset-0 z-[2] pointer-events-none"
+           style={{ background: 'radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.6) 100%)' }} />
 
-      <div className="text-center max-w-lg">
-        <p className="text-stone-600 text-xs uppercase tracking-[0.3em] mb-4">
+      <div className="relative z-10 text-center max-w-md">
+        {/* Top line */}
+        <div className="h-px w-32 mx-auto mb-10 rise-1"
+             style={{ background: `linear-gradient(90deg, transparent, ${tc.color}60, transparent)` }} />
+
+        <p className="text-xs uppercase tracking-[0.4em] mb-4 rise-1"
+           style={{ color: `${tc.color}80` }}>
           Chapter {chapter} of 3
         </p>
 
         <h2
-          className="text-5xl font-bold mb-2 gold-shimmer"
-          style={{ fontFamily: 'Georgia, serif' }}
+          className="text-4xl sm:text-5xl font-bold mb-3 rise-2"
+          style={{ fontFamily: 'Georgia, serif', color: tc.color, ...glowText(tc.color, 1.2) }}
         >
-          {title || subtitle}
+          {title || `Chapter ${chapter}`}
         </h2>
 
-        <p className="text-stone-500 text-lg mb-6">{divider}</p>
+        <p className="mb-6 text-base rise-2" style={{ color: `${tc.color}70` }}>{divider}</p>
 
         {description && (
-          <p
-            className="text-stone-400 text-base leading-relaxed mb-10 italic"
-            style={{ fontFamily: 'Georgia, serif' }}
-          >
+          <p className="text-stone-400 text-sm leading-relaxed mb-10 italic rise-3"
+             style={{ fontFamily: 'Georgia, serif' }}>
             "{description}"
           </p>
         )}
 
         {!description && (
-          <p className="text-stone-500 text-sm mb-10">
-            A new chapter begins. The path ahead grows darker.
-          </p>
+          <p className="text-stone-600 text-sm mb-10 rise-3">The path ahead grows darker.</p>
         )}
 
         <button
           onClick={onContinue}
-          className="px-8 py-3.5 bg-amber-800 hover:bg-amber-700 text-amber-100 rounded-xl font-bold tracking-widest uppercase text-sm transition-all hover:scale-[1.03] cursor-pointer shadow-lg shadow-amber-900/30"
+          className="px-8 py-3 rounded-xl font-bold tracking-widest uppercase text-sm transition-all hover:scale-[1.04] cursor-pointer active:scale-[0.98] rise-4"
+          style={{
+            background: `linear-gradient(135deg, ${tc.color}28, ${tc.color}14)`,
+            border: `1px solid ${tc.color}55`,
+            color: tc.color,
+            boxShadow: `0 0 24px ${tc.color}18`,
+          }}
         >
           Begin Chapter {chapter} →
         </button>
-      </div>
 
-      <div className="h-px w-64 mt-12 bg-gradient-to-r from-transparent via-stone-600 to-transparent" />
+        <div className="h-px w-32 mx-auto mt-10 rise-4"
+             style={{ background: `linear-gradient(90deg, transparent, ${tc.color}60, transparent)` }} />
+      </div>
     </div>
   );
 }

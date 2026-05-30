@@ -5,10 +5,39 @@ import DiceRoller from '../components/DiceRoller';
 import Choices from '../components/Choices';
 import LevelUpModal from '../components/LevelUpModal';
 import DeathRecap from '../components/DeathRecap';
+import CritFlash from '../components/CritFlash';
 import ChapterTransition from '../screens/ChapterTransition';
 import { startAdventure, continueAdventure, XP_PER_LEVEL } from '../api/narrator';
 import { saveGame, clearGame } from '../utils/save';
+import { getTheme, panelStyle, glowText } from '../utils/theme';
 
+// ── First-person ground element ─────────────────────────────────────────
+function FirstPersonGround() {
+  return (
+    <div className="fixed bottom-0 left-0 right-0 z-[3] pointer-events-none select-none">
+      {/* Gradient shadow rising from the bottom */}
+      <div style={{ height: '80px', background: 'linear-gradient(to top, rgba(0,0,0,0.92) 0%, transparent 100%)' }} />
+      {/* SVG arm silhouettes */}
+      <svg
+        viewBox="0 0 800 90"
+        xmlns="http://www.w3.org/2000/svg"
+        preserveAspectRatio="none"
+        style={{ width: '100%', height: '72px', display: 'block', marginTop: '-4px' }}
+      >
+        {/* Left arm */}
+        <path d="M0,90 L0,52 C25,38 65,40 105,52 C135,60 165,76 195,90 Z" fill="rgba(0,0,0,0.92)" />
+        {/* Right arm */}
+        <path d="M800,90 L800,52 C775,38 735,40 695,52 C665,60 635,76 605,90 Z" fill="rgba(0,0,0,0.92)" />
+        {/* Ground strip */}
+        <path d="M175,90 C220,78 310,72 400,70 C490,72 580,78 625,90 Z" fill="rgba(0,0,0,0.80)" />
+        {/* Full bottom fill */}
+        <rect x="0" y="82" width="800" height="8" fill="rgba(0,0,0,0.95)" />
+      </svg>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
 export default function GamePlay({ theme, player: initialPlayer, kidMode = false, savedGame = null, onRestart }) {
   // ── Core state (restored from save if available) ────────────────────────
   const sg = savedGame;
@@ -25,29 +54,38 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
   const [chapterTransition, setChapterTransition] = useState(null);
 
   // ── Roll / death tracking ────────────────────────────────────────────────
-  const [rollHistory, setRollHistory]       = useState(sg ? (sg.rollHistory || []) : []);
-  const [turnCount, setTurnCount]           = useState(sg ? (sg.turnCount || 0) : 0);
-  const [totalXpEarned, setTotalXpEarned]   = useState(sg ? (sg.totalXpEarned || 0) : 0);
-  const [causeOfDeath, setCauseOfDeath]     = useState('');
+  const [rollHistory, setRollHistory]     = useState(sg ? (sg.rollHistory || []) : []);
+  const [turnCount, setTurnCount]         = useState(sg ? (sg.turnCount || 0) : 0);
+  const [totalXpEarned, setTotalXpEarned] = useState(sg ? (sg.totalXpEarned || 0) : 0);
+  const [causeOfDeath, setCauseOfDeath]   = useState('');
 
   // ── UI state ─────────────────────────────────────────────────────────────
-  const [isLoading, setIsLoading]               = useState(false);
-  const [pendingAction, setPendingAction]       = useState(null);
-  const [pendingActionIsCustom, setPendingActionIsCustom] = useState(false);
-  const [rollDone, setRollDone]                 = useState(false);
-  const [gameOver, setGameOver]                 = useState(false);
-  const [victory, setVictory]                   = useState(false);
-  const [error, setError]                       = useState(null);
-  const [levelUpPending, setLevelUpPending]     = useState(false);
-  const [xpFlash, setXpFlash]                   = useState(0);
+  const [isLoading, setIsLoading]                           = useState(false);
+  const [pendingAction, setPendingAction]                   = useState(null);
+  const [pendingActionIsCustom, setPendingActionIsCustom]   = useState(false);
+  const [rollDone, setRollDone]                             = useState(false);
+  const [gameOver, setGameOver]                             = useState(false);
+  const [victory, setVictory]                               = useState(false);
+  const [error, setError]                                   = useState(null);
+  const [levelUpPending, setLevelUpPending]                 = useState(false);
+  const [xpFlash, setXpFlash]                               = useState(0);
+  // ── Visual-only state ─────────────────────────────────────────────────
+  const [critFlash, setCritFlash]   = useState(null); // null | 'success' | 'fail'
 
-  const historyRef      = useRef(sg ? sg.history : []);
-  const xpFlashTimerRef = useRef(null);
+  const historyRef       = useRef(sg ? sg.history : []);
+  const xpFlashTimerRef  = useRef(null);
+  const critFlashTimerRef = useRef(null);
+
+  // Theme config (visual only)
+  const tc = getTheme(theme);
 
   // ── Start or restore ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!sg) initAdventure();
-    return () => clearTimeout(xpFlashTimerRef.current); // cleanup on unmount
+    return () => {
+      clearTimeout(xpFlashTimerRef.current);
+      clearTimeout(critFlashTimerRef.current);
+    };
   }, []);
 
   // ── Auto-save ────────────────────────────────────────────────────────────
@@ -86,14 +124,10 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
   }
 
   // ────────────────────────────────────────────────────────────────────────
-  // applyResult — called after EVERY Claude response.
-  //   ctx      = { ch, ec, pl } for fresh values when React hasn't batched yet
-  //   rollMeta = { critSuccess, critFail } from the dice roll that preceded this call
-  // ────────────────────────────────────────────────────────────────────────
   function applyResult(result, actionText, ctx = null, rollMeta = null) {
-    const currentChapter       = ctx ? ctx.ch : chapter;
+    const currentChapter        = ctx ? ctx.ch : chapter;
     const currentEncounterCount = ctx ? ctx.ec : encounterCount;
-    const currentPlayer        = ctx ? ctx.pl : player;
+    const currentPlayer         = ctx ? ctx.pl : player;
 
     const newEntries = [];
 
@@ -102,7 +136,6 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
 
     newEntries.push({ type: 'narrative', text: result.narrative });
 
-    // ── Critical permanent effect ──
     if (result.criticalEffect) {
       newEntries.push({
         type: 'crit_effect',
@@ -111,8 +144,7 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
       });
     }
 
-    // ── Kid-mode knockout intercept ──
-    const wouldDie     = result.gameOver || (currentPlayer.hp + result.hpChange) <= 0;
+    const wouldDie      = result.gameOver || (currentPlayer.hp + result.hpChange) <= 0;
     const isKidKnockout = kidMode && wouldDie;
 
     if (isKidKnockout) {
@@ -123,10 +155,8 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
 
     if (result.itemFound) newEntries.push({ type: 'item', text: result.itemFound });
 
-    // ── XP (only when earned) ──
     if (result.xpGained > 0) {
       newEntries.push({ type: 'xp', value: result.xpGained });
-      // Trigger animated flash near XP bar
       setXpFlash(result.xpGained);
       clearTimeout(xpFlashTimerRef.current);
       xpFlashTimerRef.current = setTimeout(() => setXpFlash(0), 2500);
@@ -134,7 +164,6 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
 
     setStoryEntries(prev => [...prev, ...newEntries]);
 
-    // ── Update player ──
     setPlayer(prev => {
       let newHp;
       if (isKidKnockout) {
@@ -160,7 +189,6 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
       { role: 'assistant', content: result.rawAssistantMessage },
     ];
 
-    // ── Terminal states ──
     if (result.gameOver && !kidMode) {
       setCauseOfDeath(result.narrative);
       clearGame();
@@ -174,7 +202,6 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
       return;
     }
 
-    // ── Chapter complete (Ch1 or Ch2 only) ──
     if (result.chapterComplete && currentChapter < 3) {
       setChapterTransition({
         number: currentChapter + 1,
@@ -183,15 +210,11 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
       });
     }
 
-    // ── Set next choices ──
     setChoices(result.choices || []);
-
-    // FEATURE 2: enforce no stat tags on non-roll turns
     const sanitizedChoiceStats = result.requiresRoll
       ? (result.choiceStats || [null, null, null])
       : [null, null, null];
     setChoiceStats(sanitizedChoiceStats);
-
     setRequiresRoll(result.requiresRoll || false);
     setRollConfig({
       stat: result.rollStat || 'str',
@@ -216,15 +239,11 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
   }
 
   // ────────────────────────────────────────────────────────────────────────
-  // handleChoice — called for both preset buttons (choiceIndex ≥ 0) and
-  // custom typed actions (choiceIndex = -1).
-  // ────────────────────────────────────────────────────────────────────────
   async function handleChoice(action, choiceIndex = -1) {
     if (isLoading) return;
     const isCustom = choiceIndex === -1;
 
     if (requiresRoll) {
-      // FEATURE 1: for preset choices, enforce choiceStats stat over rollStat
       if (!isCustom && choiceIndex >= 0) {
         const taggedStat = choiceStats[choiceIndex];
         if (taggedStat && taggedStat !== rollConfig.stat) {
@@ -235,7 +254,6 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
           setRollConfig(prev => ({ ...prev, stat: taggedStat }));
         }
       }
-
       setPendingAction(action);
       setPendingActionIsCustom(isCustom);
       setStoryEntries(prev => [...prev, { type: 'action', text: action }]);
@@ -249,6 +267,17 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
   async function handleRoll(rollResult) {
     setRollDone(true);
     const actionText = pendingAction;
+
+    // ── Visual: trigger crit flash ──
+    if (rollResult.critSuccess) {
+      setCritFlash('success');
+      clearTimeout(critFlashTimerRef.current);
+      critFlashTimerRef.current = setTimeout(() => setCritFlash(null), 1500);
+    } else if (rollResult.critFail) {
+      setCritFlash('fail');
+      clearTimeout(critFlashTimerRef.current);
+      critFlashTimerRef.current = setTimeout(() => setCritFlash(null), 1500);
+    }
 
     const rollEntry = {
       label: rollConfig.reason,
@@ -278,7 +307,6 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
       const result = await continueAdventure(
         theme, playerWithCtx, historyRef.current, actionText, rollResult, kidMode
       );
-      // Pass rollMeta so applyResult can style criticalEffect correctly
       applyResult(result, null, null, {
         critSuccess: rollResult.critSuccess,
         critFail: rollResult.critFail,
@@ -324,6 +352,15 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
     }
   }
 
+  // ── Shared background layers ─────────────────────────────────────────────
+  const BgLayers = () => (
+    <>
+      <div className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat"
+           style={{ backgroundImage: `url(${tc.bgUrl})`, backgroundColor: '#050508' }} />
+      <div className="fixed inset-0 z-[1]" style={{ background: tc.overlayColor }} />
+    </>
+  );
+
   // ── Render: death recap ──────────────────────────────────────────────────
   if (gameOver) {
     return (
@@ -343,22 +380,29 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
   // ── Render: victory ──────────────────────────────────────────────────────
   if (victory) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
-        <div className="text-center fade-in max-w-lg">
-          <p className="text-8xl mb-6">👑</p>
-          <h2 className="text-5xl font-bold mb-3 gold-shimmer" style={{ fontFamily: 'Georgia, serif' }}>
+      <div className="relative min-h-screen flex flex-col items-center justify-center px-4 py-12">
+        <BgLayers />
+        <div className="relative z-10 text-center fade-in max-w-lg">
+          <p className="text-7xl mb-5" style={{ filter: `drop-shadow(0 0 16px ${tc.color})` }}>👑</p>
+          <h2 className="text-5xl font-bold mb-3" style={{ fontFamily: 'Georgia, serif', color: tc.color, ...glowText(tc.color, 1.4) }}>
             Victory
           </h2>
-          <p className="text-stone-300 text-lg mb-2">{player.name} has triumphed.</p>
-          <p className="text-stone-500 text-sm mb-4">
+          <p className="text-stone-300 text-base mb-1">{player.name} has triumphed.</p>
+          <p className="text-stone-600 text-sm mb-4">
             Level {player.level} · {turnCount} turns · {totalXpEarned} XP earned
           </p>
-          <p className="text-stone-600 text-sm mb-8 italic" style={{ fontFamily: 'Georgia, serif' }}>
+          <p className="text-stone-600 text-xs mb-8 italic" style={{ fontFamily: 'Georgia, serif' }}>
             {storyEntries.filter(e => e.type === 'narrative').slice(-1)[0]?.text}
           </p>
           <button
             onClick={onRestart}
-            className="px-6 py-3 bg-amber-800 hover:bg-amber-700 text-amber-100 rounded-xl font-bold transition-all cursor-pointer hover:scale-105"
+            className="px-6 py-3 rounded-xl font-bold tracking-wide text-sm transition-all cursor-pointer hover:scale-[1.03]"
+            style={{
+              background: `${tc.color}22`,
+              border: `1px solid ${tc.color}55`,
+              color: tc.color,
+              boxShadow: `0 0 24px ${tc.color}18`,
+            }}
           >
             New Chronicle
           </button>
@@ -381,89 +425,128 @@ export default function GamePlay({ theme, player: initialPlayer, kidMode = false
   }
 
   // ── Render: main game ────────────────────────────────────────────────────
+  const headerPanelStyle = {
+    background: 'rgba(0,0,0,0.55)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    border: `1px solid ${tc.color}20`,
+  };
+
   return (
-    <div className="min-h-screen p-4 md:p-6">
+    <div className="relative min-h-screen">
+      {/* Fixed background layers */}
+      <BgLayers />
+      {/* First person ground */}
+      <FirstPersonGround />
+      {/* Critical flash overlay */}
+      <CritFlash type={critFlash} themeColor={tc.color} />
+      {/* Level up modal */}
       {levelUpPending && (
         <LevelUpModal level={player.level} stats={player.stats} onConfirm={handleLevelUp} />
       )}
 
-      <div className="max-w-5xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold tracking-widest gold-shimmer" style={{ fontFamily: 'Georgia, serif' }}>
-              CHRONICLE
-            </h1>
-            <span className="text-stone-700 text-xs uppercase tracking-wide hidden sm:inline">
-              Ch.{chapter}/3 · Turn {turnCount}
-            </span>
-          </div>
-          <button
-            onClick={onRestart}
-            className="text-stone-600 hover:text-stone-400 text-xs uppercase tracking-wider cursor-pointer transition-colors"
-          >
-            ↩ Abandon
-          </button>
-        </div>
+      {/* Scrollable game content */}
+      <div className="relative z-10 min-h-screen p-3 md:p-5 pb-32">
+        <div className="max-w-4xl mx-auto">
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Left: HUD */}
-          <div className="lg:col-span-1">
-            <HUD
-              player={player}
-              theme={theme}
-              kidMode={kidMode}
-              rollHistory={rollHistory}
-              lastXpGained={xpFlash}
-            />
+          {/* Header bar */}
+          <div className="flex items-center justify-between mb-3 px-3 py-2 rounded-xl" style={headerPanelStyle}>
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-lg font-bold tracking-widest gold-shimmer" style={{ fontFamily: 'Georgia, serif' }}>
+                CHRONICLE
+              </h1>
+              <span className="hidden sm:inline text-xs uppercase tracking-wider" style={{ color: `${tc.color}40` }}>
+                Ch.{chapter}/3 · Turn {turnCount}
+              </span>
+            </div>
+            <button
+              onClick={onRestart}
+              className="text-xs uppercase tracking-wider transition-colors cursor-pointer"
+              style={{ color: 'rgba(255,255,255,0.25)' }}
+              onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.55)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.25)'}
+            >
+              ↩ Abandon
+            </button>
           </div>
 
-          {/* Right: Story + Controls */}
-          <div className="lg:col-span-2 space-y-4">
-            <StoryPanel entries={storyEntries} isLoading={isLoading} />
-
-            {error && (
-              <div className="bg-red-950/50 border border-red-800 rounded-xl p-3 text-red-400 text-sm">
-                <strong>Error:</strong> {error}
-                <button
-                  onClick={() => { setError(null); if (!sg) initAdventure(); }}
-                  className="ml-3 text-red-500 hover:text-red-300 underline cursor-pointer"
-                >
-                  Retry
-                </button>
-              </div>
-            )}
-
-            {/* FEATURE 4: stat explanation for custom free actions on a roll turn */}
-            {requiresRoll && pendingAction && !rollDone && pendingActionIsCustom && rollConfig.reason && (
-              <div className="bg-stone-900/60 border border-stone-700 rounded-xl px-4 py-2.5 text-sm text-stone-400 italic">
-                This calls for a{' '}
-                <span className="font-bold not-italic uppercase text-amber-400">{rollConfig.stat}</span>
-                {' '}roll —{' '}{rollConfig.reason}
-              </div>
-            )}
-
-            {requiresRoll && pendingAction && !rollDone && (
-              <DiceRoller
-                rollStat={rollConfig.stat}
-                rollDifficulty={rollConfig.difficulty}
-                rollReason={rollConfig.reason}
-                playerStats={player.stats}
-                onRoll={handleRoll}
-                disabled={isLoading}
-              />
-            )}
-
-            {!pendingAction && choices.length > 0 && !isLoading && (
-              <Choices
-                choices={choices}
-                choiceStats={choiceStats}
-                requiresRoll={requiresRoll}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            {/* Left: HUD */}
+            <div className="lg:col-span-1">
+              <HUD
+                player={player}
                 theme={theme}
-                onChoose={handleChoice}
-                disabled={isLoading}
+                kidMode={kidMode}
+                rollHistory={rollHistory}
+                lastXpGained={xpFlash}
               />
-            )}
+            </div>
+
+            {/* Right: Story + Controls */}
+            <div className="lg:col-span-2 space-y-3">
+              <StoryPanel
+                entries={storyEntries}
+                isLoading={isLoading}
+                theme={theme}
+                kidMode={kidMode}
+              />
+
+              {error && (
+                <div className="rounded-xl p-3 text-sm"
+                     style={{ background: 'rgba(200,20,20,0.15)', border: '1px solid rgba(200,20,20,0.35)', color: '#f87171' }}>
+                  <strong>Error:</strong> {error}
+                  <button
+                    onClick={() => { setError(null); if (!sg) initAdventure(); }}
+                    className="ml-3 underline cursor-pointer"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+
+              {/* Stat explanation for free-typed actions on roll turn */}
+              {requiresRoll && pendingAction && !rollDone && pendingActionIsCustom && rollConfig.reason && (
+                <div
+                  className="rounded-xl px-4 py-2.5 text-sm italic"
+                  style={{
+                    background: `${tc.color}08`,
+                    border: `1px solid ${tc.color}25`,
+                    color: 'rgba(255,255,255,0.55)',
+                  }}
+                >
+                  This calls for a{' '}
+                  <span className="font-bold not-italic uppercase" style={{ color: tc.color }}>
+                    {rollConfig.stat}
+                  </span>
+                  {' '}roll — {rollConfig.reason}
+                </div>
+              )}
+
+              {requiresRoll && pendingAction && !rollDone && (
+                <DiceRoller
+                  rollStat={rollConfig.stat}
+                  rollDifficulty={rollConfig.difficulty}
+                  rollReason={rollConfig.reason}
+                  playerStats={player.stats}
+                  onRoll={handleRoll}
+                  disabled={isLoading}
+                  theme={theme}
+                  kidMode={kidMode}
+                />
+              )}
+
+              {!pendingAction && choices.length > 0 && !isLoading && (
+                <Choices
+                  choices={choices}
+                  choiceStats={choiceStats}
+                  requiresRoll={requiresRoll}
+                  onChoose={handleChoice}
+                  disabled={isLoading}
+                  theme={theme}
+                  kidMode={kidMode}
+                />
+              )}
+            </div>
           </div>
         </div>
       </div>

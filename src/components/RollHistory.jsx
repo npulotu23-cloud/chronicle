@@ -1,53 +1,56 @@
 import { useState } from 'react';
 
-const STAT_COLORS = {
-  str: 'text-red-400',
-  agi: 'text-green-400',
-  int: 'text-blue-400',
-  fth: 'text-amber-400',
-};
+const STAT_COLORS = { str: '#f87171', agi: '#4ade80', int: '#60a5fa', fth: '#fbbf24' };
 
-export default function RollHistory({ rollHistory }) {
+export default function RollHistory({ rollHistory, themeColor = '#C9A84C' }) {
   const [open, setOpen] = useState(false);
 
   if (!rollHistory || rollHistory.length === 0) return null;
 
-  const last5 = rollHistory.slice(-5).reverse(); // most recent first
+  const last5 = rollHistory.slice(-5).reverse();
 
   return (
-    <div className="border border-stone-800 rounded-xl overflow-hidden">
-      {/* Toggle header */}
+    <div className="rounded-lg overflow-hidden" style={{ border: `1px solid rgba(255,255,255,0.07)` }}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-3 py-2 bg-stone-900 hover:bg-stone-800 transition-colors cursor-pointer"
+        className="w-full flex items-center justify-between px-3 py-2 cursor-pointer transition-all"
+        style={{ background: 'rgba(255,255,255,0.03)' }}
+        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
+        onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
       >
-        <span className="text-stone-500 text-xs uppercase tracking-wide">Roll History</span>
-        <span className="text-stone-600 text-xs">{open ? '▲' : '▼'} last {last5.length}</span>
+        <span className="text-xs uppercase tracking-wide" style={{ color: 'rgba(255,255,255,0.35)' }}>
+          Roll Log
+        </span>
+        <span className="text-xs" style={{ color: `${themeColor}50` }}>
+          {open ? '▲' : '▼'} last {last5.length}
+        </span>
       </button>
 
-      {/* Roll list */}
       {open && (
-        <div className="divide-y divide-stone-900">
+        <div>
           {last5.map((r, i) => (
-            <div key={i} className="flex items-center gap-2 px-3 py-2 bg-stone-950 text-xs">
-              {/* Result indicator */}
-              <span className={`text-sm leading-none ${r.critSuccess ? 'text-amber-400' : r.critFail ? 'text-red-500' : r.success ? 'text-green-400' : 'text-stone-500'}`}>
+            <div
+              key={i}
+              className="flex items-center gap-2 px-3 py-2 text-xs"
+              style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}
+            >
+              <span className="text-sm leading-none" style={{
+                color: r.critSuccess ? themeColor : r.critFail ? '#f87171' : r.success ? '#4ade80' : 'rgba(255,255,255,0.3)'
+              }}>
                 {r.critSuccess ? '✦' : r.critFail ? '✕' : r.success ? '✓' : '✗'}
               </span>
 
-              {/* Roll breakdown */}
               <div className="flex-1 min-w-0">
-                <p className="text-stone-400 truncate leading-tight">{r.label || 'Roll'}</p>
-                <p className="text-stone-600 leading-tight">
-                  <span className="text-stone-300 font-bold">{r.roll}</span>
-                  <span className="text-stone-600"> +{r.bonus} = </span>
-                  <span className={`font-bold ${r.success ? 'text-green-400' : 'text-red-400'}`}>{r.total}</span>
-                  <span className="text-stone-700"> / DC{r.difficulty}</span>
+                <p className="text-stone-500 truncate leading-tight">{r.label || 'Roll'}</p>
+                <p className="leading-tight" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                  <span className="font-bold" style={{ color: 'rgba(255,255,255,0.7)' }}>{r.roll}</span>
+                  <span> +{r.bonus} = </span>
+                  <span className="font-bold" style={{ color: r.success ? '#4ade80' : '#f87171' }}>{r.total}</span>
+                  <span> / DC{r.difficulty}</span>
                 </p>
               </div>
 
-              {/* Stat tag */}
-              <span className={`uppercase font-bold text-xs ${STAT_COLORS[r.stat] || 'text-stone-500'}`}>
+              <span className="font-bold uppercase text-xs" style={{ color: STAT_COLORS[r.stat] || themeColor }}>
                 {r.stat}
               </span>
             </div>
